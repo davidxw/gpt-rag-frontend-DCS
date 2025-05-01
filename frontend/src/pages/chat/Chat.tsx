@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { Checkbox, Panel, DefaultButton, TextField, SpinButton } from "@fluentui/react";
+import { Checkbox, Panel, DefaultButton, TextField, SpinButton, Toggle } from "@fluentui/react";
 import { SparkleFilled, TabDesktopMultipleBottomRegular } from "@fluentui/react-icons";
 import { getLanguageText } from '../../utils/languageUtils'; 
 
@@ -48,6 +48,10 @@ const Chat = () => {
     const [userId, setUserId] = useState<string>("");
     const triggered = useRef(false);
 
+    const [isWorkMode, setIsWorkMode] = useState<boolean>(true);
+
+    const selectWorkMode = () => setIsWorkMode(true);
+    const selectWebMode = () => setIsWorkMode(false);
 
     const makeApiRequestGpt = async (question: string) => {
         lastQuestionRef.current = question;
@@ -63,6 +67,7 @@ const Chat = () => {
                 history: [...history, { user: question, bot: undefined }],
                 approach: Approaches.ReadRetrieveRead,
                 conversation_id: userId,
+                is_work_mode: isWorkMode,
                 query: question,
                 overrides: {
                     promptTemplate: promptTemplate.length === 0 ? undefined : promptTemplate,
@@ -269,6 +274,28 @@ const Chat = () => {
             </div>
             <div className={styles.chatRoot}>
                 <div className={styles.chatContainer}>
+                <div className={styles.modeToggleContainer}>
+                    <div
+                        id="mode-work"
+                        role="button"
+                        tabIndex={0}
+                        className={`${styles.modeToggleButton} ${isWorkMode ? styles.activeMode : ""}`}
+                        aria-pressed={isWorkMode}
+                        onClick={selectWorkMode}
+                    >
+                        <p className={styles.modeToggleText}>Work</p>
+                    </div>
+                    <div
+                        id="mode-web"
+                        role="button"
+                        tabIndex={0}
+                        className={`${styles.modeToggleButton} ${!isWorkMode ? styles.activeMode : ""}`}
+                        aria-pressed={!isWorkMode}
+                        onClick={selectWebMode}
+                    >
+                        <p className={styles.modeToggleText}>LM</p>
+                    </div>
+                </div>
                     {!lastQuestionRef.current ? (
                         <div className={styles.chatEmptyState}>
                         </div>

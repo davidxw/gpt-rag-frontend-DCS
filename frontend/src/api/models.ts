@@ -58,6 +58,7 @@ export type ChatTurn = {
 
 export type ChatRequest = {
     history: ChatTurn[];
+    is_work_mode: boolean;
     approach: Approaches;
     overrides?: AskRequestOverrides;
 };
@@ -65,6 +66,7 @@ export type ChatRequest = {
 export type ChatRequestGpt = {
     history: ChatTurn[];
     approach: Approaches;
+    is_work_mode: boolean;
     conversation_id: string;
     query: string;
     overrides?: AskRequestOverrides;
