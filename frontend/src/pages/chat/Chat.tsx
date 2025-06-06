@@ -293,7 +293,7 @@ const Chat = () => {
                         aria-pressed={!isWorkMode}
                         onClick={selectWebMode}
                     >
-                        <p className={styles.modeToggleText}>LM</p>
+                        <p className={styles.modeToggleText}>Chat</p>
                     </div>
                 </div>
                     {!lastQuestionRef.current ? (
