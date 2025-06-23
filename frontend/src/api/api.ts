@@ -12,6 +12,7 @@ export async function chatApiGpt(options: ChatRequestGpt): Promise<AskResponseGp
             history: options.history,
             approach: options.approach,
             conversation_id: options.conversation_id,
+            is_work_mode: options.is_work_mode,
             query: options.query,
             overrides: {
                 semantic_ranker: options.overrides?.semanticRanker,

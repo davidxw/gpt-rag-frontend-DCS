@@ -113,3 +113,72 @@
     margin-right: 20px;
     margin-bottom: 20px;
 }
+
+.commandToggle {
+    margin-right: 10px;
+}
+
+.toggleContainer {
+    display: flex;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-right: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.toggleButton {
+    padding: 6px 12px;
+    cursor: pointer;
+    background-color: var(--bg-color);
+    transition: background-color 0.2s ease;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toggleButtonActive {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.toggleText {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.modeToggleContainer {
+    display: flex;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-right: 10px;
+    border: 1px solid #ccc;
+    justify-content: center;
+}
+
+#mode-work {
+    margin: 0 auto;
+}
+
+.modeToggleButton {
+    padding: 6px 12px;
+    cursor: pointer;
+    background-color: #f2f2f2;
+    transition: background-color 0.2s ease;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.activeMode {
+    background-color: #0078d4;
+    color: white;
+}
+
+.modeToggleText {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+}
