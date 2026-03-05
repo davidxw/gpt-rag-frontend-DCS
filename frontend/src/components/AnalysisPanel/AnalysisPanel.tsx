@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from "react";
-import { Pivot, PivotItem } from "@fluentui/react";
+import { Pivot, PivotItem, IconButton } from "@fluentui/react";
 import DOMPurify from "dompurify";
 import styles from "./AnalysisPanel.module.css";
 import { AskResponse, Thought } from "../../api";
@@ -11,11 +11,13 @@ interface Props {
   className: string;
   activeTab: AnalysisPanelTabs | undefined;
   onActiveTabChanged: (tab: AnalysisPanelTabs) => void;
+  onClose: () => void;
   activeCitation: string | undefined;
   citationHeight: string;
   answer: AskResponse;
   fileType?: string;
   fileName?: string;
+  page?: number;
 }
 
 const pivotItemDisabledStyle = { disabled: true, style: { color: "grey" } };
@@ -24,11 +26,13 @@ export const AnalysisPanel = ({
   answer,
   activeTab,
   onActiveTabChanged,
+  onClose,
   activeCitation,
   citationHeight,
   className,
   fileType = "txt",
   fileName,
+  page,
 }: Props) => {
   if (!activeTab) {
     return null; // or render a default view
@@ -79,8 +83,15 @@ export const AnalysisPanel = ({
   const isDisabledCitationTab = !activeCitation;
 
   return (
-    <Pivot
-      className={className}
+    <div className={className} style={{ position: "relative" }}>
+      <IconButton
+        iconProps={{ iconName: "Cancel" }}
+        title="Close"
+        ariaLabel="Close panel"
+        onClick={onClose}
+        styles={{ root: { position: "absolute", top: 4, right: 4, zIndex: 1 } }}
+      />
+      <Pivot
       selectedKey={activeTab}
       onLinkClick={(pivotItem) => {
         if (pivotItem) {
@@ -112,11 +123,12 @@ export const AnalysisPanel = ({
         >
           <div className={styles.thoughtProcess}>
             <Suspense fallback={<div>Loading document...</div>}>
-              <LazyViewer base64Doc={activeCitation} fileType={fileType} fileName={fileName} />
+              <LazyViewer base64Doc={activeCitation} fileType={fileType} fileName={fileName} page={page} />
             </Suspense>
           </div>
         </PivotItem>
       )}
     </Pivot>
+    </div>
   );
 };

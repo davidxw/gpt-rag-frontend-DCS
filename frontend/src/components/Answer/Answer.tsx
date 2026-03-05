@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useCallback, useEffect } from "react";
 import { Stack, IconButton } from "@fluentui/react";
 import DOMPurify from "dompurify";
 
 import styles from "./Answer.module.css";
 
-import { AskResponse, getCitationFilePath } from "../../api";
+import { AskResponse, getCitationFilePath, parseCitation } from "../../api";
 import { parseAnswerToHtml } from "./AnswerParser";
 import { AnswerIcon } from "./AnswerIcon";
 
@@ -16,7 +16,7 @@ const citation_label_text = getLanguageText('citationLabel');
 interface Props {
     answer: AskResponse;
     isSelected?: boolean;
-    onCitationClicked: (filePath: string, filename: string) => void;
+    onCitationClicked: (filePath: string, filename: string, page?: number) => void;
     onThoughtProcessClicked: () => void;
     onSupportingContentClicked: () => void;
     onFollowupQuestionClicked?: (question: string) => void;
@@ -47,6 +47,25 @@ export const Answer = ({
 
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
 
+    const answerTextRef = useRef<HTMLDivElement>(null);
+
+    const handleInlineCitationClick = useCallback((e: MouseEvent) => {
+        const target = (e.target as HTMLElement).closest(".citation-link") as HTMLAnchorElement | null;
+        if (!target) return;
+        e.preventDefault();
+        const citationData = target.getAttribute("data-citation") || "";
+        const { fileName: citFileName, page: citPage } = parseCitation(citationData);
+        const path = getCitationFilePath(citFileName);
+        onCitationClicked(path, citFileName, citPage);
+    }, [onCitationClicked]);
+
+    useEffect(() => {
+        const el = answerTextRef.current;
+        if (!el) return;
+        el.addEventListener("click", handleInlineCitationClick);
+        return () => el.removeEventListener("click", handleInlineCitationClick);
+    }, [handleInlineCitationClick]);
+
     return (
         <Stack className={`${styles.answerContainer} ${isSelected && styles.selected}`} verticalAlign="space-between">
             <Stack.Item>
@@ -69,7 +88,7 @@ export const Answer = ({
             </Stack.Item>
 
             <Stack.Item grow>
-                <div className={styles.answerText} dangerouslySetInnerHTML={{ __html: sanitizedAnswerHtml }}></div>
+                <div ref={answerTextRef} className={styles.answerText} dangerouslySetInnerHTML={{ __html: sanitizedAnswerHtml }}></div>
             </Stack.Item>
 
             {!!parsedAnswer.citations.length && showSources && (
@@ -77,10 +96,14 @@ export const Answer = ({
                     <Stack horizontal wrap tokens={{ childrenGap: 5 }}>
                         <span className={styles.citationLearnMore}>{citation_label_text}:</span>
                         {parsedAnswer.citations.map((x, i) => {
-                            const path = getCitationFilePath(x);
+                            const { fileName: citFileName, page: citPage } = parseCitation(x);
+                            const path = getCitationFilePath(citFileName);
+                            const displayText = citPage
+                                ? `${truncateString(citFileName, 15)} / Page ${citPage}`
+                                : truncateString(citFileName, 15);
                             return (
-                                <a key={i} className={styles.citation} title={x} onClick={() => onCitationClicked(path, x)}>
-                                    {`${++i}. ${truncateString(x, 15)}`}
+                                <a key={i} className={styles.citation} title={citFileName} onClick={() => onCitationClicked(path, citFileName, citPage)}>
+                                    {`${++i}. ${displayText}`}
                                 </a>
                             );
                         })}
