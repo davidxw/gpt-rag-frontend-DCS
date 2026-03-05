@@ -43,6 +43,21 @@ if (-not $?) { Write-Host "Frontend build failed!" -ForegroundColor Red; exit 1 
 
 Set-Location "../"
 
+# Step 1b: Build Tester
+Write-Host "Building tester..."
+Set-Location "tester"
+if (-not (Test-Path "package.json")) {
+    Write-Host "Tester folder not found!" -ForegroundColor Red
+    exit 1
+}
+
+npm install
+if (-not $?) { Write-Host "Tester build failed!" -ForegroundColor Red; exit 1 }
+npm run build
+if (-not $?) { Write-Host "Tester build failed!" -ForegroundColor Red; exit 1 }
+
+Set-Location "../"
+
 # Step 2: Prepare for deployment
 Write-Host "Preparing for deployment..."
 

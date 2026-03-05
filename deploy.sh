@@ -34,6 +34,12 @@ cd frontend || { echo "Frontend folder not found!"; exit 1; }
 npm install
 npm run build || { echo "Frontend build failed!"; exit 1; }
 
+# Step 1b: Build Tester
+echo "Building tester..."
+cd ../tester || { echo "Tester folder not found!"; exit 1; }
+npm install
+npm run build || { echo "Tester build failed!"; exit 1; }
+
 # Step 2: Prepare for deployment
 echo "Preparing for deployment..."
 
