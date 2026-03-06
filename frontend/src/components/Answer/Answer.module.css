@@ -14,9 +14,29 @@
     font-size: 16px;
     font-weight: 400;
     line-height: 22px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-    white-space: pre-line;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    white-space: normal;
+}
+
+.answerText h1, .answerText h2, .answerText h3,
+.answerText h4, .answerText h5, .answerText h6 {
+    margin: 8px 0 4px 0;
+}
+
+.answerText ul, .answerText ol {
+    margin: 4px 0;
+    padding-left: 24px;
+}
+
+.answerText li {
+    margin: 2px 0;
+}
+
+.answerText br {
+    display: block;
+    content: "";
+    margin: 2px 0;
 }
 
 .answerText table {

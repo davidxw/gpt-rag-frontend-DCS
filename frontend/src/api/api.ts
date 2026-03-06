@@ -35,6 +35,14 @@ export async function chatApiGpt(options: ChatRequestGpt): Promise<AskResponseGp
     return parsedResponse;
 }
 
+export function parseCitation(citation: string): { fileName: string; page?: number } {
+    const match = citation.match(/^(.+)#page=(\d+)$/);
+    if (match) {
+        return { fileName: match[1], page: parseInt(match[2], 10) };
+    }
+    return { fileName: citation };
+}
+
 export function getCitationFilePath(citation: string): string {
     var storage_account = "please_check_if_storage_account_is_in_frontend_app_settings";
     

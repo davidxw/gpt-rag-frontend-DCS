@@ -1,7 +1,7 @@
 // src/components/Answer/AnswerParser.tsx
 
 // Import necessary modules and types
-import { getCitationFilePath } from "../../api";
+import { getCitationFilePath, parseCitation } from "../../api";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 
@@ -20,7 +20,8 @@ type HtmlParsedAnswer = {
  * @returns The text without citations.
  */
 export function removeCitations(text: string): string {
-  return text.replace(/\[[^\]]*\]/g, "");
+  // Remove [doc][PageN] patterns first, then remaining single [citation]
+  return text.replace(/\[[^\]]+\]\[Page\d+\]/g, "").replace(/\[[^\]]*\]/g, "");
 }
 
 /**
@@ -52,17 +53,19 @@ export function parseAnswerToHtml(
   let processedAnswer = parsedAnswer;
 
   if (showSources) {
-    // 3. Replace citations with unique placeholders and collect them.
-    // Citations are assumed to be in the format [citation].
-    processedAnswer = processedAnswer.replace(/\[([^\]]+)\]/g, (_, citation) => {
-      const trimmedCitation = citation.trim();
-      if (!citations.includes(trimmedCitation)) {
-        citations.push(trimmedCitation);
+    // 3a. First pass: match [filename][PageN] patterns as a single citation.
+    processedAnswer = processedAnswer.replace(
+      /\[([^\]]+)\]\[Page(\d+)\]/g,
+      (_, filename, pageNum) => {
+        const combinedCitation = `${filename.trim()}#page=${pageNum}`;
+        if (!citations.includes(combinedCitation)) {
+          citations.push(combinedCitation);
+        }
+        const citationIndex = citations.indexOf(combinedCitation) + 1;
+        return `CITATION_MARKER_${citationIndex}`;
       }
-      const citationIndex = citations.indexOf(trimmedCitation) + 1;
-      // Use a unique placeholder to identify citations later.
-      return `CITATION_MARKER_${citationIndex}`;
-    });
+    );
+
   } else {
     // 4. If sources are not to be shown, remove citations entirely.
     processedAnswer = removeCitations(processedAnswer);
@@ -80,7 +83,8 @@ export function parseAnswerToHtml(
     htmlContent = htmlContent.replace(/CITATION_MARKER_(\d+)/g, (_: string, index: string) => {
       const citationIndex = parseInt(index, 10);
       const citation = citations[citationIndex - 1];
-      const path = getCitationFilePath(citation);
+      const { fileName } = parseCitation(citation);
+      const path = getCitationFilePath(fileName);
 
       // Return an anchor tag with data attributes and a unique class for event handling.
       return `<a class="supContainer citation-link" title="${DOMPurify.sanitize(

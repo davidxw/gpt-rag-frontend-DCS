@@ -23,6 +23,7 @@ const Chat = () => {
     const speechSynthesisEnabled = false;
 
     const [fileName, setFileName] = useState<string>("");
+    const [activePage, setActivePage] = useState<number | undefined>(undefined);
     const [placeholderText, setPlaceholderText] = useState("");
     const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
     const [promptTemplate, setPromptTemplate] = useState<string>("");
@@ -205,7 +206,7 @@ const Chat = () => {
         makeApiRequestGpt(example);
     };
 
-    const onShowCitation = async (citation: string, fileName: string, index: number) => {
+    const onShowCitation = async (citation: string, fileName: string, index: number, page?: number) => {
         try {
             // Get the document blob
             const response = await getDocument(fileName);
@@ -214,6 +215,7 @@ const Chat = () => {
             // Set file type and file name in state
             setFileType(type);
             setFileName(fileName);
+            setActivePage(page);
     
             if (activeCitation === citation && activeAnalysisPanelTab === AnalysisPanelTabs.CitationTab && selectedAnswer === index) {
                 setActiveAnalysisPanelTab(undefined);
@@ -282,7 +284,7 @@ const Chat = () => {
                                                 key={index}
                                                 answer={answer[1]}
                                                 isSelected={selectedAnswer === index && activeAnalysisPanelTab !== undefined}
-                                                onCitationClicked={(c, n) => onShowCitation(c, n, index)}
+                                                onCitationClicked={(c, n, p) => onShowCitation(c, n, index, p)}
                                                 onThoughtProcessClicked={() => onThoughtProcessClicked(index)}
                                                 onSupportingContentClicked={() => onToggleTab(AnalysisPanelTabs.SupportingContentTab, index)}
                                                 onFollowupQuestionClicked={q => makeApiRequestGpt(q)}
@@ -328,10 +330,12 @@ const Chat = () => {
                         className={styles.chatAnalysisPanel}
                         activeCitation={activeCitation}
                         onActiveTabChanged={x => onToggleTab(x, selectedAnswer)}
+                        onClose={() => setActiveAnalysisPanelTab(undefined)}
                         citationHeight="810px"
                         answer={answers[selectedAnswer][1]}
                         fileType={fileType}
-                        fileName={fileName} 
+                        fileName={fileName}
+                        page={activePage}
                     />
 
                 )}
