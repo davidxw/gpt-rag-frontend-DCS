@@ -123,7 +123,13 @@ export const AnalysisPanel = ({
         >
           <div className={styles.thoughtProcess}>
             <Suspense fallback={<div>Loading document...</div>}>
-              <LazyViewer base64Doc={activeCitation} fileType={fileType} fileName={fileName} page={page} />
+              <LazyViewer
+                key={`${fileName ?? ""}-${page ?? 1}`}
+                base64Doc={activeCitation}
+                fileType={fileType}
+                fileName={fileName}
+                page={page}
+              />
             </Suspense>
           </div>
         </PivotItem>
