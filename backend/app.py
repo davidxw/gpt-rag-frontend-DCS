@@ -237,6 +237,8 @@ def tester_index():
 def tester_static(path):
     if not ENABLE_TESTER:
         return "Tester is disabled", 404
+    if ENABLE_AUTHENTICATION and not session.get("user"):
+        return redirect(url_for("login"))
     return send_from_directory('static_tester', path)
 
 @app.route("/")
