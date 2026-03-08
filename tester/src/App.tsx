@@ -203,15 +203,23 @@ const App: React.FC = () => {
     };
 
     const toggleSelectAll = () => {
-        const newVal = !selectAll;
-        setSelectAll(newVal);
-        setRows(prev => prev.map(r => ({ ...r, selected: newVal })));
+        // Determine if all rows are currently selected and toggle accordingly.
+        setRows(prev => {
+            const allSelected = prev.length > 0 && prev.every(r => r.selected);
+            const newVal = !allSelected;
+            return prev.map(r => ({ ...r, selected: newVal }));
+        });
     };
 
     const toggleSelect = (id: number) => {
         setRows(prev => prev.map(r => (r.id === id ? { ...r, selected: !r.selected } : r)));
     };
 
+    useEffect(() => {
+        // Keep the header "select all" checkbox in sync with the row selection state.
+        const allSelected = rows.length > 0 && rows.every(r => r.selected);
+        setSelectAll(allSelected);
+    }, [rows, setSelectAll]);
     const toggleExpandRow = (rowId: number) => {
         setExpandedRows(prev => {
             const next = new Set(prev);
