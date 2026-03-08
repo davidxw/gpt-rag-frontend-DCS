@@ -9,7 +9,7 @@ import requests
 from azure.identity import ManagedIdentityCredential, AzureCliCredential, ChainedTokenCredential
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, request, session, redirect, url_for
+from flask import Flask, Response, jsonify, request, session, redirect, url_for, send_from_directory
 from flask_cors import CORS
 import msal
 from flask_session import Session
@@ -56,6 +56,8 @@ SCOPE = [
 ALLOWED_GROUP_NAMES = read_env_list('ALLOWED_GROUP_NAMES')
 ALLOWED_USER_PRINCIPALS = read_env_list('ALLOWED_USER_PRINCIPALS')
 ALLOWED_USER_NAMES = read_env_list('ALLOWED_USER_NAMES')
+
+ENABLE_TESTER = read_env_boolean('ENABLE_TESTER')
 
 SPEECH_RECOGNITION_LANGUAGE = read_env_variable('SPEECH_RECOGNITION_LANGUAGE')
 SPEECH_SYNTHESIS_LANGUAGE = read_env_variable('SPEECH_SYNTHESIS_LANGUAGE')
@@ -221,6 +223,23 @@ def _save_cache(cache):
         session["token_cache"] = cache.serialize()
 
 # --- End Authentication Endpoints ---
+
+@app.route("/tester")
+@app.route("/tester/")
+def tester_index():
+    if not ENABLE_TESTER:
+        return "Tester is disabled", 404
+    if ENABLE_AUTHENTICATION and not session.get("user"):
+        return redirect(url_for("login"))
+    return send_from_directory('static_tester', 'index.html')
+
+@app.route("/tester/<path:path>")
+def tester_static(path):
+    if not ENABLE_TESTER:
+        return "Tester is disabled", 404
+    if ENABLE_AUTHENTICATION and not session.get("user"):
+        return redirect(url_for("login"))
+    return send_from_directory('static_tester', path)
 
 @app.route("/")
 def index():
