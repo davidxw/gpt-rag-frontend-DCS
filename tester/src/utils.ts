@@ -8,7 +8,17 @@ export function parseReferences(text: string): { cleanText: string; references: 
     let match;
 
     while ((match = refRegex.exec(text)) !== null) {
-        const filename = decodeURIComponent(match[1]);
+        const rawFilename = match[1];
+        let filename = rawFilename;
+        try {
+            // Only attempt to decode if it looks URI-encoded to avoid unnecessary work
+            if (/%[0-9A-Fa-f]{2}/.test(rawFilename)) {
+                filename = decodeURIComponent(rawFilename);
+            }
+        } catch {
+            // If decoding fails, fall back to the raw filename
+            filename = rawFilename;
+        }
         const page = match[2];
         const ref = `${filename} (Page ${page})`;
         if (!references.includes(ref)) {
