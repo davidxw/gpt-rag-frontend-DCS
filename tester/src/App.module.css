@@ -39,6 +39,18 @@
     font-size: 14px;
 }
 
+.healthLink {
+    margin-left: auto;
+    color: #002f87;
+    font-size: 13px;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.healthLink:hover {
+    text-decoration: underline;
+}
+
 /* Main */
 .main {
     flex: 1;

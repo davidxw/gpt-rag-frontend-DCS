@@ -296,6 +296,7 @@ const App: React.FC = () => {
                         {rows.length} test{rows.length !== 1 ? "s" : ""} loaded
                         {completedCount > 0 && ` · ${completedCount} completed`}
                     </span>
+                    <a href="/tester/health" className={styles.healthLink}>Health</a>
                 </div>
             </header>
 

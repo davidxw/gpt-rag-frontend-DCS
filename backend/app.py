@@ -36,6 +36,7 @@ def read_env_boolean(var_name, default=False):
 # Read Environment Variables
 SPEECH_REGION = read_env_variable('SPEECH_REGION')
 ORCHESTRATOR_ENDPOINT = read_env_variable('ORCHESTRATOR_ENDPOINT')
+HEALTH_ENDPOINT = read_env_variable('HEALTH_ENDPOINT')
 STORAGE_ACCOUNT = read_env_variable('STORAGE_ACCOUNT')
 LOGLEVEL = read_env_variable('LOGLEVEL', 'INFO').upper()
 
@@ -233,6 +234,14 @@ def tester_index():
         return redirect(url_for("login"))
     return send_from_directory('static_tester', 'index.html')
 
+@app.route("/tester/health")
+def tester_health():
+    if not ENABLE_TESTER:
+        return "Tester is disabled", 404
+    if ENABLE_AUTHENTICATION and not session.get("user"):
+        return redirect(url_for("login"))
+    return send_from_directory('static_tester', 'index.html')
+
 @app.route("/tester/<path:path>")
 def tester_static(path):
     if not ENABLE_TESTER:
@@ -327,6 +336,62 @@ def check_authorization():
         'client_group_names': groups,
         'access_token': access_token
     }
+
+@app.route("/api/health-check", methods=["GET"])
+def health_check():
+    if not HEALTH_ENDPOINT:
+        return jsonify({"error": "HEALTH_ENDPOINT not configured"}), 500
+    try:
+        function_key = get_function_key()
+        headers = {'x-functions-key': function_key} if function_key else {}
+        response = requests.get(HEALTH_ENDPOINT, headers=headers, timeout=30)
+        return Response(response.content, status=response.status_code, content_type=response.headers.get('Content-Type', 'application/json'))
+    except Exception as e:
+        logging.error("[webbackend] exception in /api/health-check")
+        logging.exception(e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/webapp-health", methods=["GET"])
+def webapp_health():
+    result = {
+        "settings": [
+            {"name": "ORCHESTRATOR_ENDPOINT", "value": ORCHESTRATOR_ENDPOINT or "", "description": "Orchestrator function endpoint URL"},
+            {"name": "STORAGE_ACCOUNT", "value": STORAGE_ACCOUNT or "", "description": "Azure Storage account name for document storage"}
+        ],
+        "userInfo": {
+            "X-MS-CLIENT-PRINCIPAL-ID": request.headers.get("X-MS-CLIENT-PRINCIPAL-ID", ""),
+            "X-MS-CLIENT-PRINCIPAL-NAME": request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME", ""),
+            "X-MS-CLIENT-PRINCIPAL-IDP": request.headers.get("X-MS-CLIENT-PRINCIPAL-IDP", "")
+        },
+        "healthChecks": []
+    }
+
+    # Storage access check
+    storage_check = {"name": "Storage Access", "status": "passed", "elapsedTime": "0.0s"}
+    if not STORAGE_ACCOUNT:
+        storage_check["status"] = "failed"
+        storage_check["error"] = "STORAGE_ACCOUNT not configured"
+    else:
+        try:
+            import time as _time
+            start = _time.time()
+            credential = ChainedTokenCredential(ManagedIdentityCredential(), AzureCliCredential())
+            blob_service_client = BlobServiceClient(
+                f"https://{STORAGE_ACCOUNT}.blob.core.windows.net", credential
+            )
+            container_client = blob_service_client.get_container_client("documents")
+            # List up to 1 blob to verify access
+            next(container_client.list_blobs(results_per_page=1).__iter__(), None)
+            elapsed = _time.time() - start
+            storage_check["elapsedTime"] = f"{elapsed:.3f}s"
+        except Exception as e:
+            elapsed = _time.time() - start
+            storage_check["status"] = "failed"
+            storage_check["elapsedTime"] = f"{elapsed:.3f}s"
+            storage_check["error"] = str(e)
+
+    result["healthChecks"].append(storage_check)
+    return jsonify(result)
 
 @app.route("/chatgpt", methods=["POST"])
 def chatgpt():

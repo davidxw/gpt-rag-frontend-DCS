@@ -12,7 +12,9 @@ export default defineConfig({
     server: {
         port: 5174,
         proxy: {
-            "/chatgpt": "http://localhost:8000"
+            "/chatgpt": "http://localhost:8000",
+            "/api/health-check": "http://localhost:8000",
+            "/api/webapp-health": "http://localhost:8000"
         },
         host: true
     }
