@@ -57,6 +57,27 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
+echo "Restoring tester npm packages"
+echo ""
+
+cd ../tester
+npm install
+if [ $? -ne 0 ]; then
+    echo "Failed to restore tester npm packages"
+    exit $?
+fi
+
+echo ""
+echo "Building tester"
+echo ""
+
+npm run build
+if [ $? -ne 0 ]; then
+    echo "Failed to build tester"
+    exit $?
+fi
+
+echo ""
 echo "Starting backend"
 echo ""
 
