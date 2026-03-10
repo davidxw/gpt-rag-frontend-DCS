@@ -339,8 +339,19 @@ def check_authorization():
 
 @app.route("/api/health-check", methods=["GET"])
 def health_check():
+    error_response = {
+        "overallStatus": "unhealthy",
+        "healthChecks": [],
+        "settings": []
+    }
     if not HEALTH_ENDPOINT:
-        return jsonify({"error": "HEALTH_ENDPOINT not configured"}), 500
+        error_response["healthChecks"] = [{
+            "name": "Orchestrator Health Endpoint",
+            "status": "failed",
+            "elapsedTime": "0.0s",
+            "error": "HEALTH_ENDPOINT not configured"
+        }]
+        return jsonify(error_response), 200
     try:
         function_key = get_function_key()
         headers = {'x-functions-key': function_key} if function_key else {}
@@ -349,7 +360,13 @@ def health_check():
     except Exception as e:
         logging.error("[webbackend] exception in /api/health-check")
         logging.exception(e)
-        return jsonify({"error": str(e)}), 500
+        error_response["healthChecks"] = [{
+            "name": "Orchestrator Health Endpoint",
+            "status": "failed",
+            "elapsedTime": "0.0s",
+            "error": str(e)
+        }]
+        return jsonify(error_response), 200
 
 @app.route("/api/webapp-health", methods=["GET"])
 def webapp_health():

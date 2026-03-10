@@ -82,8 +82,16 @@ const Health: React.FC = () => {
         setWebappError(null);
 
         const [beResult, waResult] = await Promise.allSettled([
-            fetch("/api/health-check").then(r => r.json()),
-            fetch("/api/webapp-health").then(r => r.json())
+            fetch("/api/health-check").then(async r => {
+                const json = await r.json();
+                if (json.overallStatus !== undefined) return json;
+                throw new Error(json.error || `HTTP ${r.status}`);
+            }),
+            fetch("/api/webapp-health").then(async r => {
+                const json = await r.json();
+                if (json.settings !== undefined) return json;
+                throw new Error(json.error || `HTTP ${r.status}`);
+            })
         ]);
 
         if (beResult.status === "fulfilled") setBackend(beResult.value);
