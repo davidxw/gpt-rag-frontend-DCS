@@ -20,8 +20,8 @@ type HtmlParsedAnswer = {
  * @returns The text without citations.
  */
 export function removeCitations(text: string): string {
-  // Remove [doc][PageN] or [doc][PageN-M] patterns first, then remaining single [citation]
-  return text.replace(/\[[^\]]+\]\[Page\s*\d+(?:\s*-\s*\d+)?\]/gi, "").replace(/\[[^\]]*\]/g, "");
+  // Remove [doc][Page...][optional title] patterns first, then remaining single [citation]
+  return text.replace(/\[[^\]]+\]\[Page[^\]]*\](?:\[[^\]]*\])?/gi, "").replace(/\[[^\]]*\]/g, "");
 }
 
 /**
@@ -53,12 +53,18 @@ export function parseAnswerToHtml(
   let processedAnswer = parsedAnswer;
 
   if (showSources) {
-    // 3a. First pass: match [filename][PageN] or [filename][PageN-M] patterns as a single citation.
+    // 3a. First pass: match [filename][Page...] or [filename][Page...][title] patterns.
     processedAnswer = processedAnswer.replace(
-      /\[([^\]]+)\]\[Page\s*(\d+)(?:\s*-\s*(\d+))?\]/gi,
-      (_, filename, pageStart, pageEnd) => {
-        const pageRef = pageEnd ? `${pageStart}-${pageEnd}` : pageStart;
-        const combinedCitation = `${filename.trim()}#page=${pageRef}`;
+      /\[([^\]]+)\]\[(Page[^\]]*)\](?:\[([^\]]*)\])?/gi,
+      (_, filename, pageRef, docTitle) => {
+        const nums = pageRef.match(/\d+/g);
+        const pageStart = nums?.[0];
+        const pageEnd = nums?.[1];
+        const pageVal = pageEnd ? `${pageStart}-${pageEnd}` : (pageStart || "1");
+        let combinedCitation = `${filename.trim()}#page=${pageVal}`;
+        if (docTitle && docTitle.trim()) {
+          combinedCitation += `#title=${docTitle.trim()}`;
+        }
         if (!citations.includes(combinedCitation)) {
           citations.push(combinedCitation);
         }
@@ -84,12 +90,13 @@ export function parseAnswerToHtml(
     htmlContent = htmlContent.replace(/CITATION_MARKER_(\d+)/g, (_: string, index: string) => {
       const citationIndex = parseInt(index, 10);
       const citation = citations[citationIndex - 1];
-      const { fileName } = parseCitation(citation);
+      const { fileName, title } = parseCitation(citation);
       const path = getCitationFilePath(fileName);
+      const tooltipText = title || fileName;
 
       // Return an anchor tag with data attributes and a unique class for event handling.
       return `<a class="supContainer citation-link" title="${DOMPurify.sanitize(
-        citation
+        tooltipText
       )}" data-citation="${DOMPurify.sanitize(citation)}" data-path="${DOMPurify.sanitize(
         path
       )}" href="#"><sup>${citationIndex}</sup></a>`;

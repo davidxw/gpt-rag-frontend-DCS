@@ -35,13 +35,14 @@ export async function chatApiGpt(options: ChatRequestGpt): Promise<AskResponseGp
     return parsedResponse;
 }
 
-export function parseCitation(citation: string): { fileName: string; page?: number; pageEnd?: number } {
-    const match = citation.match(/^(.+)#page=(\d+)(?:-(\d+))?$/);
+export function parseCitation(citation: string): { fileName: string; page?: number; pageEnd?: number; title?: string } {
+    const match = citation.match(/^(.+?)#page=(\d+)(?:-(\d+))?(?:#title=(.+))?$/);
     if (match) {
         return {
             fileName: match[1],
             page: parseInt(match[2], 10),
-            pageEnd: match[3] ? parseInt(match[3], 10) : undefined
+            pageEnd: match[3] ? parseInt(match[3], 10) : undefined,
+            title: match[4] || undefined
         };
     }
     return { fileName: citation };
