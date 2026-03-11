@@ -454,12 +454,22 @@ def health_check():
 
 @app.route("/api/webapp-health", methods=["GET"])
 def webapp_health():
+    auth_info = check_authorization()
     result = {
         "settings": [
+            {"name": "AUTHENTICATION_MODE", "value": AUTHENTICATION_MODE, "description": "Authentication mode: none (no auth), builtin (MSAL/OIDC), or easyauth (App Service Authentication)"},
             {"name": "ORCHESTRATOR_ENDPOINT", "value": ORCHESTRATOR_ENDPOINT or "", "description": "Orchestrator function endpoint URL"},
             {"name": "STORAGE_ACCOUNT", "value": STORAGE_ACCOUNT or "", "description": "Azure Storage account name for document storage"}
         ],
-        "userInfo": {
+        "authInfo": {
+            "authenticationMode": AUTHENTICATION_MODE,
+            "authorized": auth_info['authorized'],
+            "principalId": auth_info['client_principal_id'] or "",
+            "principalName": auth_info['client_principal_name'] or "",
+            "groups": auth_info['client_group_names'],
+            "hasAccessToken": bool(auth_info['access_token'])
+        },
+        "easyAuthHeaders": {
             "X-MS-CLIENT-PRINCIPAL-ID": request.headers.get("X-MS-CLIENT-PRINCIPAL-ID", ""),
             "X-MS-CLIENT-PRINCIPAL-NAME": request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME", ""),
             "X-MS-CLIENT-PRINCIPAL-IDP": request.headers.get("X-MS-CLIENT-PRINCIPAL-IDP", "")
