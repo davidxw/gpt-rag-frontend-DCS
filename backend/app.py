@@ -110,6 +110,34 @@ def get_function_key():
     
     return function_key
 
+def get_health_function_key():
+    subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID')
+    resource_group = os.getenv('AZURE_RESOURCE_GROUP_NAME')
+    function_app_name = os.getenv('AZURE_HEALTH_FUNC_NAME') or os.getenv('AZURE_ORCHESTRATOR_FUNC_NAME')
+    if not function_app_name:
+        logging.error("[webbackend] Neither AZURE_HEALTH_FUNC_NAME nor AZURE_ORCHESTRATOR_FUNC_NAME is configured.")
+        return None
+    token = get_managed_identity_token()
+    logging.info("[webbackend] Obtaining health function key.")
+
+    requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/functions/health/listKeys?api-version=2022-03-01"
+
+    requestHeaders = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(requestUrl, headers=requestHeaders)
+    response_json = json.loads(response.content.decode('utf-8'))
+
+    try:
+        function_key = response_json['default']
+    except KeyError as e:
+        function_key = None
+        logging.error(f"[webbackend] Error when getting health function key. Details: {str(e)}.")
+
+    return function_key
+
 app = Flask(__name__)
 CORS(app)
 
@@ -353,7 +381,7 @@ def health_check():
         }]
         return jsonify(error_response), 200
     try:
-        function_key = get_function_key()
+        function_key = get_health_function_key()
         headers = {'x-functions-key': function_key} if function_key else {}
         response = requests.get(HEALTH_ENDPOINT, headers=headers, timeout=30)
         return Response(response.content, status=response.status_code, content_type=response.headers.get('Content-Type', 'application/json'))
