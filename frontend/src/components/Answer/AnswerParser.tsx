@@ -20,8 +20,8 @@ type HtmlParsedAnswer = {
  * @returns The text without citations.
  */
 export function removeCitations(text: string): string {
-  // Remove [doc][PageN] patterns first, then remaining single [citation]
-  return text.replace(/\[[^\]]+\]\[Page\s*\d+\]/gi, "").replace(/\[[^\]]*\]/g, "");
+  // Remove [doc][PageN] or [doc][PageN-M] patterns first, then remaining single [citation]
+  return text.replace(/\[[^\]]+\]\[Page\s*\d+(?:\s*-\s*\d+)?\]/gi, "").replace(/\[[^\]]*\]/g, "");
 }
 
 /**
@@ -53,11 +53,12 @@ export function parseAnswerToHtml(
   let processedAnswer = parsedAnswer;
 
   if (showSources) {
-    // 3a. First pass: match [filename][PageN] patterns as a single citation.
+    // 3a. First pass: match [filename][PageN] or [filename][PageN-M] patterns as a single citation.
     processedAnswer = processedAnswer.replace(
-      /\[([^\]]+)\]\[Page\s*(\d+)\]/gi,
-      (_, filename, pageNum) => {
-        const combinedCitation = `${filename.trim()}#page=${pageNum}`;
+      /\[([^\]]+)\]\[Page\s*(\d+)(?:\s*-\s*(\d+))?\]/gi,
+      (_, filename, pageStart, pageEnd) => {
+        const pageRef = pageEnd ? `${pageStart}-${pageEnd}` : pageStart;
+        const combinedCitation = `${filename.trim()}#page=${pageRef}`;
         if (!citations.includes(combinedCitation)) {
           citations.push(combinedCitation);
         }

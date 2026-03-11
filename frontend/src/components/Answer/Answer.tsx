@@ -96,10 +96,13 @@ export const Answer = ({
                     <Stack horizontal wrap tokens={{ childrenGap: 5 }}>
                         <span className={styles.citationLearnMore}>{citation_label_text}:</span>
                         {parsedAnswer.citations.map((x, i) => {
-                            const { fileName: citFileName, page: citPage } = parseCitation(x);
+                            const { fileName: citFileName, page: citPage, pageEnd: citPageEnd } = parseCitation(x);
                             const path = getCitationFilePath(citFileName);
-                            const displayText = citPage
-                                ? `${truncateString(citFileName, 15)} / Page ${citPage}`
+                            const pageLabel = citPage
+                                ? (citPageEnd ? `Pages ${citPage}-${citPageEnd}` : `Page ${citPage}`)
+                                : undefined;
+                            const displayText = pageLabel
+                                ? `${truncateString(citFileName, 15)} / ${pageLabel}`
                                 : truncateString(citFileName, 15);
                             return (
                                 <a key={i} className={styles.citation} title={citFileName} onClick={() => onCitationClicked(path, citFileName, citPage)}>
