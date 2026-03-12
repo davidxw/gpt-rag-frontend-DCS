@@ -37,9 +37,9 @@ def read_env_boolean(var_name, default=False):
 # Read Environment Variables
 SPEECH_REGION = read_env_variable('SPEECH_REGION')
 ORCHESTRATOR_ENDPOINT = read_env_variable('ORCHESTRATOR_ENDPOINT')
-HEALTH_ENDPOINT = read_env_variable('HEALTH_ENDPOINT')
 STORAGE_ACCOUNT = read_env_variable('STORAGE_ACCOUNT')
 LOGLEVEL = read_env_variable('LOGLEVEL', 'INFO').upper()
+CONVERSATION_HISTORY_LIMIT = int(read_env_variable('CONVERSATION_HISTORY_LIMIT', '15'))
 
 # Authentication mode: "none", "builtin" (MSAL), or "easyauth" (App Service Authentication)
 AUTHENTICATION_MODE = read_env_variable('AUTHENTICATION_MODE', 'none').lower()
@@ -102,10 +102,10 @@ def get_function_key():
     resource_group = os.getenv('AZURE_RESOURCE_GROUP_NAME')
     function_app_name = os.getenv('AZURE_ORCHESTRATOR_FUNC_NAME')
     token = get_managed_identity_token()
-    logging.info("[webbackend] Obtaining function key.")
+    logging.info("[webbackend] Obtaining host function key.")
     
-    # URL to get all function keys, including the default one
-    requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/functions/orc/listKeys?api-version=2022-03-01"
+    # Use the host default key which works for all functions in the Function App
+    requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/host/default/listKeys?api-version=2022-03-01"
     
     requestHeaders = {
         "Authorization": f"Bearer {token}",
@@ -116,41 +116,14 @@ def get_function_key():
     response_json = json.loads(response.content.decode('utf-8'))
     
     try:
-        # Assuming you want to get the 'default' key
-        function_key = response_json['default']
+        function_key = response_json['functionKeys']['default']
     except KeyError as e:
         function_key = None
-        logging.error(f"[webbackend] Error when getting function key. Details: {str(e)}.")
+        logging.error(f"[webbackend] Error when getting host function key. Details: {str(e)}.")
     
     return function_key
 
-def get_health_function_key():
-    subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID')
-    resource_group = os.getenv('AZURE_RESOURCE_GROUP_NAME')
-    function_app_name = os.getenv('AZURE_HEALTH_FUNC_NAME') or os.getenv('AZURE_ORCHESTRATOR_FUNC_NAME')
-    if not function_app_name:
-        logging.error("[webbackend] Neither AZURE_HEALTH_FUNC_NAME nor AZURE_ORCHESTRATOR_FUNC_NAME is configured.")
-        return None
-    token = get_managed_identity_token()
-    logging.info("[webbackend] Obtaining health function key.")
 
-    requestUrl = f"https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.Web/sites/{function_app_name}/functions/health/listKeys?api-version=2022-03-01"
-
-    requestHeaders = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
-    response = requests.post(requestUrl, headers=requestHeaders)
-    response_json = json.loads(response.content.decode('utf-8'))
-
-    try:
-        function_key = response_json['default']
-    except KeyError as e:
-        function_key = None
-        logging.error(f"[webbackend] Error when getting health function key. Details: {str(e)}.")
-
-    return function_key
 
 app = Flask(__name__)
 CORS(app)
@@ -439,19 +412,50 @@ def health_check():
         "healthChecks": [],
         "settings": []
     }
-    if not HEALTH_ENDPOINT:
+    base_url = ORCHESTRATOR_ENDPOINT.rsplit('/', 1)[0] if ORCHESTRATOR_ENDPOINT else ''
+    if not base_url:
         error_response["healthChecks"] = [{
             "name": "Orchestrator Health Endpoint",
             "status": "failed",
             "elapsedTime": "0.0s",
-            "error": "HEALTH_ENDPOINT not configured"
+            "error": "ORCHESTRATOR_ENDPOINT not configured"
         }]
         return jsonify(error_response), 200
     try:
-        function_key = get_health_function_key()
+        health_url = f"{base_url}/health"
+        function_key = get_function_key()
         headers = {'x-functions-key': function_key} if function_key else {}
-        response = requests.get(HEALTH_ENDPOINT, headers=headers, timeout=30)
-        return Response(response.content, status=response.status_code, content_type=response.headers.get('Content-Type', 'application/json'))
+        response = requests.get(health_url, headers=headers, timeout=30)
+        # Try to parse the upstream response as JSON
+        try:
+            data = response.json()
+            return jsonify(data), 200
+        except (ValueError, requests.exceptions.JSONDecodeError):
+            # Upstream returned non-JSON (e.g. HTML error page, empty body)
+            body_preview = response.text[:200] if response.text else "(empty response)"
+            error_response["healthChecks"] = [{
+                "name": "Orchestrator Health Endpoint",
+                "status": "failed",
+                "elapsedTime": "0.0s",
+                "error": f"Health endpoint returned HTTP {response.status_code} with non-JSON response: {body_preview}"
+            }]
+            return jsonify(error_response), 200
+    except requests.exceptions.ConnectionError:
+        error_response["healthChecks"] = [{
+            "name": "Orchestrator Health Endpoint",
+            "status": "failed",
+            "elapsedTime": "0.0s",
+            "error": f"Could not connect to health endpoint at {base_url}/health"
+        }]
+        return jsonify(error_response), 200
+    except requests.exceptions.Timeout:
+        error_response["healthChecks"] = [{
+            "name": "Orchestrator Health Endpoint",
+            "status": "failed",
+            "elapsedTime": ">30s",
+            "error": f"Health endpoint timed out at {base_url}/health"
+        }]
+        return jsonify(error_response), 200
     except Exception as e:
         logging.error("[webbackend] exception in /api/health-check")
         logging.exception(e)
@@ -630,7 +634,7 @@ def list_conversations():
         if not base_url:
             return jsonify({"error": "ORCHESTRATOR_ENDPOINT not configured"}), 500
 
-        limit = request.args.get('limit', '20')
+        limit = request.args.get('limit', str(CONVERSATION_HISTORY_LIMIT))
         url = f"{base_url}/conversations"
         function_key = get_function_key()
         headers = {'x-functions-key': function_key} if function_key else {}

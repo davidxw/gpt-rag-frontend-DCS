@@ -75,8 +75,9 @@ export async function fetchAuthInfo(): Promise<AuthInfo> {
     return response.json();
 }
 
-export async function fetchConversations(limit: number = 20): Promise<ConversationsResponse> {
-    const response = await fetch(`/api/conversations?limit=${limit}`);
+export async function fetchConversations(limit?: number): Promise<ConversationsResponse> {
+    const url = limit != null ? `/api/conversations?limit=${limit}` : "/api/conversations";
+    const response = await fetch(url);
     if (!response.ok) {
         throw new Error("Failed to fetch conversations");
     }

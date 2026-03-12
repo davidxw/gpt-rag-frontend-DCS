@@ -26,7 +26,7 @@ export const ConversationHistory = ({ isOpen, onDismiss, onConversationLoad }: P
         setIsLoading(true);
         setError(null);
         try {
-            const result = await fetchConversations(20);
+            const result = await fetchConversations();
             setConversations(result.conversations || []);
         } catch {
             setError("Failed to load conversation history.");
