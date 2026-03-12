@@ -328,10 +328,17 @@ def _get_groups_from_graph(access_token):
         graph_response = requests.get(graph_url, headers=graph_headers)
         graph_response.raise_for_status()
         group_data = graph_response.json()
-        groups = [group.get('displayName', 'missing-group-read-all-permission') for group in group_data.get('value', [])]
+        for member in group_data.get('value', []):
+            if member.get('@odata.type') != '#microsoft.graph.group':
+                continue
+            name = member.get('displayName')
+            if not name:
+                logging.warning("[webbackend] Group object missing displayName, skipping.")
+                continue
+            groups.append(name)
         logging.info(f"[webbackend] User groups from Graph API: {groups}")
     except Exception as e:
-        logging.info(f"[webbackend] Failed to get user groups from Graph API: {e}")
+        logging.warning(f"[webbackend] Failed to get user groups from Graph API: {e}")
     return groups
 
 def _check_authorization_none():
