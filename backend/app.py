@@ -73,6 +73,11 @@ SPEECH_RECOGNITION_LANGUAGE = read_env_variable('SPEECH_RECOGNITION_LANGUAGE')
 SPEECH_SYNTHESIS_LANGUAGE = read_env_variable('SPEECH_SYNTHESIS_LANGUAGE')
 SPEECH_SYNTHESIS_VOICE_NAME = read_env_variable('SPEECH_SYNTHESIS_VOICE_NAME')
 
+# Debug: override principal ID for local testing without authentication
+DEBUG_PRINCIPAL_ID = read_env_variable('DEBUG_PRINCIPAL_ID')
+if DEBUG_PRINCIPAL_ID:
+    logging.warning(f"[webbackend] DEBUG_PRINCIPAL_ID is set to '{DEBUG_PRINCIPAL_ID}'. This should NOT be used in production.")
+
 # Set logging
 logging.basicConfig(level=LOGLEVEL)
 
@@ -415,11 +420,17 @@ def _check_authorization_easyauth():
 
 def check_authorization():
     if AUTHENTICATION_MODE == 'easyauth':
-        return _check_authorization_easyauth()
+        result = _check_authorization_easyauth()
     elif AUTHENTICATION_MODE == 'builtin':
-        return _check_authorization_builtin()
+        result = _check_authorization_builtin()
     else:
-        return _check_authorization_none()
+        result = _check_authorization_none()
+
+    if DEBUG_PRINCIPAL_ID:
+        result['client_principal_id'] = DEBUG_PRINCIPAL_ID
+        result['authorized'] = True
+
+    return result
 
 @app.route("/api/health-check", methods=["GET"])
 def health_check():
@@ -596,6 +607,71 @@ def getStorageAccount():
         return json.dumps({'storageaccount': STORAGE_ACCOUNT})
     except Exception as e:
         logging.exception("[webbackend] exception in /api/get-storage-account")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/auth-info", methods=["GET"])
+def auth_info():
+    auth = check_authorization()
+    return jsonify({
+        "authenticated": auth['authorized'] and auth['client_principal_id'] not in (None, 'no-auth'),
+        "principalId": auth['client_principal_id'] or "",
+        "principalName": auth['client_principal_name'] or ""
+    })
+
+@app.route("/api/conversations", methods=["GET"])
+def list_conversations():
+    auth = check_authorization()
+    if not auth['authorized'] or not auth['client_principal_id'] or auth['client_principal_id'] == 'no-auth':
+        return jsonify({"error": "Not authenticated"}), 401
+
+    try:
+        # Derive base URL from ORCHESTRATOR_ENDPOINT (remove last path segment e.g. /api/orc -> /api)
+        base_url = ORCHESTRATOR_ENDPOINT.rsplit('/', 1)[0] if ORCHESTRATOR_ENDPOINT else ''
+        if not base_url:
+            return jsonify({"error": "ORCHESTRATOR_ENDPOINT not configured"}), 500
+
+        limit = request.args.get('limit', '20')
+        url = f"{base_url}/conversations"
+        function_key = get_function_key()
+        headers = {'x-functions-key': function_key} if function_key else {}
+        params = {
+            'client_principal_id': auth['client_principal_id'],
+            'limit': limit
+        }
+        response = requests.get(url, headers=headers, params=params, timeout=15)
+        return Response(response.content, status=response.status_code,
+                        content_type=response.headers.get('Content-Type', 'application/json'))
+    except Exception as e:
+        logging.exception("[webbackend] exception in /api/conversations")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/conversation-detail", methods=["GET"])
+def conversation_detail():
+    auth = check_authorization()
+    if not auth['authorized'] or not auth['client_principal_id'] or auth['client_principal_id'] == 'no-auth':
+        return jsonify({"error": "Not authenticated"}), 401
+
+    conversation_id = request.args.get('conversation_id')
+    if not conversation_id:
+        return jsonify({"error": "conversation_id is required"}), 400
+
+    try:
+        base_url = ORCHESTRATOR_ENDPOINT.rsplit('/', 1)[0] if ORCHESTRATOR_ENDPOINT else ''
+        if not base_url:
+            return jsonify({"error": "ORCHESTRATOR_ENDPOINT not configured"}), 500
+
+        url = f"{base_url}/conversation_detail"
+        function_key = get_function_key()
+        headers = {'x-functions-key': function_key} if function_key else {}
+        params = {
+            'conversation_id': conversation_id,
+            'client_principal_id': auth['client_principal_id']
+        }
+        response = requests.get(url, headers=headers, params=params, timeout=15)
+        return Response(response.content, status=response.status_code,
+                        content_type=response.headers.get('Content-Type', 'application/json'))
+    except Exception as e:
+        logging.exception("[webbackend] exception in /api/conversation-detail")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/get-blob", methods=["POST"])

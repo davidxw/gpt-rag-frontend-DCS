@@ -70,3 +70,33 @@ export type ChatRequestGpt = {
     overrides?: AskRequestOverrides;
 };
 
+export type AuthInfo = {
+    authenticated: boolean;
+    principalId: string;
+    principalName: string;
+};
+
+export type ConversationSummary = {
+    id: string;
+    start_date: string;
+    interaction_count: number;
+    first_question: string;
+};
+
+export type ConversationsResponse = {
+    client_principal_id: string;
+    conversations: ConversationSummary[];
+};
+
+export type ConversationMessage = {
+    role: "user" | "assistant";
+    content: string;
+};
+
+export type ConversationDetailResponse = {
+    conversation_id: string;
+    start_date: string;
+    history: ConversationMessage[];
+    interaction_count: number;
+};
+
