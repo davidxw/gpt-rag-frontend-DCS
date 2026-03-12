@@ -26,13 +26,23 @@ interface BackendResponse {
     settings: SettingGroup[];
 }
 
+interface AuthInfo {
+    authenticationMode: string;
+    authorized: boolean;
+    principalId: string;
+    principalName: string;
+    groups: string[];
+    hasAccessToken: boolean;
+}
+
 interface WebAppResponse {
     settings: Setting[];
-    userInfo: Record<string, string>;
+    authInfo: AuthInfo;
+    easyAuthHeaders: Record<string, string>;
     healthChecks: HealthCheck[];
 }
 
-const userInfoDescriptions: Record<string, string> = {
+const easyAuthHeaderDescriptions: Record<string, string> = {
     "X-MS-CLIENT-PRINCIPAL-ID": "An identifier that the identity provider sets for the caller",
     "X-MS-CLIENT-PRINCIPAL-NAME": "A human-readable name such as an email address or user principal name",
     "X-MS-CLIENT-PRINCIPAL-IDP": "The name of the identity provider that App Service authentication uses"
@@ -154,12 +164,21 @@ const Health: React.FC = () => {
                                         <HealthChecks checks={webapp.healthChecks} />
                                         <tr><td colSpan={3} className={styles.groupHeader}>Settings</td></tr>
                                         <SettingsRows settings={webapp.settings} />
-                                        <tr><td colSpan={3} className={styles.groupHeader}>User Identity</td></tr>
+                                        <tr><td colSpan={3} className={styles.groupHeader}>Authenticated User</td></tr>
+                                        <SettingsRows settings={[
+                                            { name: "Authentication Mode", value: webapp.authInfo.authenticationMode, description: "Current authentication mode (none, builtin, or easyauth)" },
+                                            { name: "Authorized", value: webapp.authInfo.authorized ? "Yes" : "No", description: "Whether the user is authorized to access the application" },
+                                            { name: "Principal ID", value: webapp.authInfo.principalId, description: "The user's Entra ID object identifier (OID)" },
+                                            { name: "Principal Name", value: webapp.authInfo.principalName, description: "The user's display name or UPN" },
+                                            { name: "Groups", value: webapp.authInfo.groups.join(", ") || "—", description: "Entra ID group memberships" },
+                                            { name: "Access Token", value: webapp.authInfo.hasAccessToken ? "Present" : "Not available", description: "Whether an access token is available for downstream calls" }
+                                        ]} />
+                                        <tr><td colSpan={3} className={styles.groupHeader}>Easy Auth Headers</td></tr>
                                         <SettingsRows
-                                            settings={Object.entries(webapp.userInfo).map(([name, value]) => ({
+                                            settings={Object.entries(webapp.easyAuthHeaders).map(([name, value]) => ({
                                                 name,
                                                 value: value || "",
-                                                description: userInfoDescriptions[name] || ""
+                                                description: easyAuthHeaderDescriptions[name] || ""
                                             }))}
                                         />
                                     </tbody>

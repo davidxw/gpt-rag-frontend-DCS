@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -40,8 +41,16 @@ HEALTH_ENDPOINT = read_env_variable('HEALTH_ENDPOINT')
 STORAGE_ACCOUNT = read_env_variable('STORAGE_ACCOUNT')
 LOGLEVEL = read_env_variable('LOGLEVEL', 'INFO').upper()
 
-# MSAL / OIDC configuration for custom authentication
-ENABLE_AUTHENTICATION = read_env_boolean('ENABLE_AUTHENTICATION')
+# Authentication mode: "none", "builtin" (MSAL), or "easyauth" (App Service Authentication)
+AUTHENTICATION_MODE = read_env_variable('AUTHENTICATION_MODE', 'none').lower()
+if AUTHENTICATION_MODE not in ('none', 'builtin', 'easyauth'):
+    logging.warning(f"[webbackend] Invalid AUTHENTICATION_MODE '{AUTHENTICATION_MODE}', defaulting to 'none'.")
+    AUTHENTICATION_MODE = 'none'
+# Backward compatibility: if ENABLE_AUTHENTICATION is set and AUTHENTICATION_MODE is not explicitly configured
+if os.getenv('AUTHENTICATION_MODE') is None and read_env_boolean('ENABLE_AUTHENTICATION'):
+    AUTHENTICATION_MODE = 'builtin'
+logging.info(f"[webbackend] Authentication mode: {AUTHENTICATION_MODE}")
+
 FORWARD_ACCESS_TOKEN_TO_ORCHESTRATOR = read_env_boolean('FORWARD_ACCESS_TOKEN_TO_ORCHESTRATOR')
 OTHER_AUTH_SCOPES = read_env_list('OTHER_AUTH_SCOPES')
 CLIENT_ID = os.getenv("CLIENT_ID", "your_client_id")
@@ -169,7 +178,7 @@ def get_valid_access_token(scopes):
 # --- Authentication Endpoints ---
 @app.route("/login")
 def login():
-    if not ENABLE_AUTHENTICATION:
+    if AUTHENTICATION_MODE != 'builtin':
         return redirect(url_for("index"))
     session["state"] = str(uuid.uuid4())
     auth_url = _build_auth_url(scopes=SCOPE, state=session["state"])
@@ -177,7 +186,7 @@ def login():
 
 @app.route(REDIRECT_PATH)
 def authorized():
-    if not ENABLE_AUTHENTICATION:
+    if AUTHENTICATION_MODE != 'builtin':
         return redirect(url_for("index"))
     
     if request.args.get("state") != session.get("state"):
@@ -215,12 +224,14 @@ def authorized():
 
 @app.route("/logout")
 def logout():
-    if ENABLE_AUTHENTICATION:
+    if AUTHENTICATION_MODE == 'builtin':
         session.clear()
         return redirect(
             AUTHORITY + "/oauth2/v2.0/logout" +
             "?post_logout_redirect_uri=" + url_for("index", _external=True)
         )
+    elif AUTHENTICATION_MODE == 'easyauth':
+        return redirect("/.auth/logout")
     else:
         return redirect(url_for("index"))
 
@@ -253,12 +264,16 @@ def _save_cache(cache):
 
 # --- End Authentication Endpoints ---
 
+def _requires_builtin_login():
+    """Check if builtin auth mode requires login redirect."""
+    return AUTHENTICATION_MODE == 'builtin' and not session.get("user")
+
 @app.route("/tester")
 @app.route("/tester/")
 def tester_index():
     if not ENABLE_TESTER:
         return "Tester is disabled", 404
-    if ENABLE_AUTHENTICATION and not session.get("user"):
+    if _requires_builtin_login():
         return redirect(url_for("login"))
     return send_from_directory('static_tester', 'index.html')
 
@@ -266,7 +281,7 @@ def tester_index():
 def tester_health():
     if not ENABLE_TESTER:
         return "Tester is disabled", 404
-    if ENABLE_AUTHENTICATION and not session.get("user"):
+    if _requires_builtin_login():
         return redirect(url_for("login"))
     return send_from_directory('static_tester', 'index.html')
 
@@ -274,13 +289,13 @@ def tester_health():
 def tester_static(path):
     if not ENABLE_TESTER:
         return "Tester is disabled", 404
-    if ENABLE_AUTHENTICATION and not session.get("user"):
+    if _requires_builtin_login():
         return redirect(url_for("login"))
     return send_from_directory('static_tester', path)
 
 @app.route("/")
 def index():
-    if ENABLE_AUTHENTICATION and not session.get("user"):
+    if _requires_builtin_login():
         return redirect(url_for("login"))
     return app.send_static_file("index.html")
 
@@ -288,16 +303,47 @@ def index():
 def static_files(path):
     return app.send_static_file(path)
 
-def check_authorization():
-    if not ENABLE_AUTHENTICATION:
-        return {
-            'authorized': True,
-            'client_principal_id': 'no-auth',
-            'client_principal_name': 'anonymous',
-            'client_group_names': [],
-            'access_token': None
-        }
-    
+def _evaluate_access(client_principal_id, client_principal_name, groups):
+    """Shared authorization logic for all auth modes."""
+    if not (ALLOWED_GROUP_NAMES or ALLOWED_USER_PRINCIPALS or ALLOWED_USER_NAMES):
+        return True
+    if client_principal_name in ALLOWED_USER_NAMES:
+        return True
+    if client_principal_id in ALLOWED_USER_PRINCIPALS:
+        return True
+    if any(group in ALLOWED_GROUP_NAMES for group in groups):
+        return True
+    logging.info("[webbackend] User is not in allowed groups or users.")
+    return False
+
+def _get_groups_from_graph(access_token):
+    """Fetch group membership from Microsoft Graph API."""
+    groups = []
+    if not access_token:
+        logging.info("[webbackend] No valid access token available; cannot get user groups")
+        return groups
+    try:
+        graph_headers = {'Authorization': f'Bearer {access_token}'}
+        graph_url = 'https://graph.microsoft.com/v1.0/me/memberOf'
+        graph_response = requests.get(graph_url, headers=graph_headers)
+        graph_response.raise_for_status()
+        group_data = graph_response.json()
+        groups = [group.get('displayName', 'missing-group-read-all-permission') for group in group_data.get('value', [])]
+        logging.info(f"[webbackend] User groups from Graph API: {groups}")
+    except Exception as e:
+        logging.info(f"[webbackend] Failed to get user groups from Graph API: {e}")
+    return groups
+
+def _check_authorization_none():
+    return {
+        'authorized': True,
+        'client_principal_id': 'no-auth',
+        'client_principal_name': 'anonymous',
+        'client_group_names': [],
+        'access_token': None
+    }
+
+def _check_authorization_builtin():
     user = session.get("user")
     if not user:
         logging.info("[webbackend] No user in session; user is not authenticated.")
@@ -329,33 +375,8 @@ def check_authorization():
             other_access_token = session.get("other_access_token", None)
     
     access_token = other_access_token if other_access_token else graph_access_token
-    
-    groups = []
-    if graph_access_token:
-        try:
-            graph_headers = {'Authorization': f'Bearer {graph_access_token}'}
-            graph_url = 'https://graph.microsoft.com/v1.0/me/memberOf'
-            graph_response = requests.get(graph_url, headers=graph_headers)
-            graph_response.raise_for_status()
-            group_data = graph_response.json()
-            groups = [group.get('displayName', 'missing-group-read-all-permission') for group in group_data.get('value', [])]
-            logging.info(f"[webbackend] User groups from Graph API: {groups}")
-        except Exception as e:
-            logging.info(f"[webbackend] Failed to get user groups from Graph API: {e}")
-    else:
-        logging.info("[webbackend] No valid Graph access token available; cannot get user groups")
-    
-    authorized = True
-    if ALLOWED_GROUP_NAMES or ALLOWED_USER_PRINCIPALS or ALLOWED_USER_NAMES:
-        authorized = False
-        if client_principal_name in ALLOWED_USER_NAMES:
-            authorized = True
-        elif client_principal_id in ALLOWED_USER_PRINCIPALS:
-            authorized = True
-        elif any(group in ALLOWED_GROUP_NAMES for group in groups):
-            authorized = True
-        if not authorized:
-            logging.info("[webbackend] User is not in allowed groups or users.")
+    groups = _get_groups_from_graph(graph_access_token)
+    authorized = _evaluate_access(client_principal_id, client_principal_name, groups)
     
     return {
         'authorized': authorized,
@@ -364,6 +385,41 @@ def check_authorization():
         'client_group_names': groups,
         'access_token': access_token
     }
+
+def _check_authorization_easyauth():
+    principal_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
+    principal_name = request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME")
+
+    if not principal_id:
+        logging.info("[webbackend] No X-MS-CLIENT-PRINCIPAL-ID header; user is not authenticated via Easy Auth.")
+        return {
+            'authorized': False,
+            'client_principal_id': None,
+            'client_principal_name': None,
+            'client_group_names': [],
+            'access_token': None
+        }
+
+    # Use the AAD access token provided by Easy Auth (requires token store to be enabled)
+    access_token = request.headers.get("X-MS-TOKEN-AAD-ACCESS-TOKEN")
+    groups = _get_groups_from_graph(access_token)
+    authorized = _evaluate_access(principal_id, principal_name, groups)
+
+    return {
+        'authorized': authorized,
+        'client_principal_id': principal_id,
+        'client_principal_name': principal_name,
+        'client_group_names': groups,
+        'access_token': access_token
+    }
+
+def check_authorization():
+    if AUTHENTICATION_MODE == 'easyauth':
+        return _check_authorization_easyauth()
+    elif AUTHENTICATION_MODE == 'builtin':
+        return _check_authorization_builtin()
+    else:
+        return _check_authorization_none()
 
 @app.route("/api/health-check", methods=["GET"])
 def health_check():
@@ -398,12 +454,22 @@ def health_check():
 
 @app.route("/api/webapp-health", methods=["GET"])
 def webapp_health():
+    auth_info = check_authorization()
     result = {
         "settings": [
+            {"name": "AUTHENTICATION_MODE", "value": AUTHENTICATION_MODE, "description": "Authentication mode: none (no auth), builtin (MSAL/OIDC), or easyauth (App Service Authentication)"},
             {"name": "ORCHESTRATOR_ENDPOINT", "value": ORCHESTRATOR_ENDPOINT or "", "description": "Orchestrator function endpoint URL"},
             {"name": "STORAGE_ACCOUNT", "value": STORAGE_ACCOUNT or "", "description": "Azure Storage account name for document storage"}
         ],
-        "userInfo": {
+        "authInfo": {
+            "authenticationMode": AUTHENTICATION_MODE,
+            "authorized": auth_info['authorized'],
+            "principalId": auth_info['client_principal_id'] or "",
+            "principalName": auth_info['client_principal_name'] or "",
+            "groups": auth_info['client_group_names'],
+            "hasAccessToken": bool(auth_info['access_token'])
+        },
+        "easyAuthHeaders": {
             "X-MS-CLIENT-PRINCIPAL-ID": request.headers.get("X-MS-CLIENT-PRINCIPAL-ID", ""),
             "X-MS-CLIENT-PRINCIPAL-NAME": request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME", ""),
             "X-MS-CLIENT-PRINCIPAL-IDP": request.headers.get("X-MS-CLIENT-PRINCIPAL-IDP", "")
