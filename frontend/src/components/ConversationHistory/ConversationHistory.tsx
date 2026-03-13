@@ -27,7 +27,10 @@ export const ConversationHistory = ({ isOpen, onDismiss, onConversationLoad }: P
         setError(null);
         try {
             const result = await fetchConversations();
-            setConversations(result.conversations || []);
+            const sorted = (result.conversations || []).sort((a, b) =>
+                b.start_date.localeCompare(a.start_date)
+            );
+            setConversations(sorted);
         } catch {
             setError("Failed to load conversation history.");
         } finally {
@@ -72,10 +75,13 @@ export const ConversationHistory = ({ isOpen, onDismiss, onConversationLoad }: P
 
     const formatDate = (dateStr: string) => {
         try {
-            const date = new Date(dateStr + "Z");
-            return date.toLocaleDateString(undefined, {
-                month: "short",
+            // Dates are stored as UTC – parse and display in local time
+            const iso = dateStr.replace(" ", "T").replace(/Z?$/, "Z");
+            const date = new Date(iso);
+            if (isNaN(date.getTime())) return dateStr;
+            return date.toLocaleString(undefined, {
                 day: "numeric",
+                month: "short",
                 hour: "2-digit",
                 minute: "2-digit"
             });
