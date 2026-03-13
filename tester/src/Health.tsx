@@ -91,16 +91,23 @@ const Health: React.FC = () => {
         setBackendError(null);
         setWebappError(null);
 
+        const handleResponse = async (r: Response, label: string) => {
+            if (!r.ok) throw new Error(`${label} returned HTTP ${r.status}`);
+            const text = await r.text();
+            if (!text) throw new Error(`Empty response from ${label}`);
+            try { return JSON.parse(text); } catch { throw new Error(`Invalid JSON from ${label}`); }
+        };
+
         const [beResult, waResult] = await Promise.allSettled([
             fetch("/api/health-check").then(async r => {
-                const json = await r.json();
+                const json = await handleResponse(r, "health-check");
                 if (json.overallStatus !== undefined) return json;
-                throw new Error(json.error || `HTTP ${r.status}`);
+                throw new Error(json.error || "Unexpected response from health-check");
             }),
             fetch("/api/webapp-health").then(async r => {
-                const json = await r.json();
+                const json = await handleResponse(r, "webapp-health");
                 if (json.settings !== undefined) return json;
-                throw new Error(json.error || `HTTP ${r.status}`);
+                throw new Error(json.error || "Unexpected response from webapp-health");
             })
         ]);
 
@@ -151,7 +158,7 @@ const Health: React.FC = () => {
                                 <DefaultButton text="Refresh" onClick={fetchAll} className={styles.refreshBtn} />
                             </div>
                             {webappError ? (
-                                <div className={styles.errorContainer}>Failed to load: {webappError}</div>
+                                <div className={styles.errorContainer}>{webappError}</div>
                             ) : webapp && (
                                 <table className={styles.settingsTable}>
                                     <colgroup>
@@ -203,7 +210,7 @@ const Health: React.FC = () => {
                                 )}
                             </div>
                             {backendError ? (
-                                <div className={styles.errorContainer}>Failed to load: {backendError}</div>
+                                <div className={styles.errorContainer}>{backendError}</div>
                             ) : backend && (
                                 <table className={styles.settingsTable}>
                                     <colgroup>

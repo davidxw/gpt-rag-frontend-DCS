@@ -4,7 +4,7 @@ type LanguageKey = 'restartConversation' | 'citationLabel' | 'generatingResponse
 
 const languageMap: Record<string, Record<LanguageKey, string>> = {
   en: {
-    restartConversation: 'Restart conversation',
+    restartConversation: 'New conversation',
     citationLabel: 'Sources',
     generatingResponse: 'Generating response',
     micPrompt: 'You can talk using your microphone...',

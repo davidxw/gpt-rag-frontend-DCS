@@ -1,4 +1,4 @@
-import { AskRequest, AskResponse, AskResponseGpt, ChatRequest, ChatRequestGpt } from "./models";
+import { AskRequest, AskResponse, AskResponseGpt, AuthInfo, ChatRequest, ChatRequestGpt, ConversationDetailResponse, ConversationsResponse } from "./models";
 
 
 
@@ -65,4 +65,29 @@ export function getCitationFilePath(citation: string): string {
     const file_path = `https://${storage_account}.blob.core.windows.net/documents/${citation}`
     console.log('Citation file path:' + file_path);
     return `https://${storage_account}.blob.core.windows.net/documents/${citation}`;
+}
+
+export async function fetchAuthInfo(): Promise<AuthInfo> {
+    const response = await fetch("/api/auth-info");
+    if (!response.ok) {
+        return { authenticated: false, principalId: "", principalName: "" };
+    }
+    return response.json();
+}
+
+export async function fetchConversations(limit?: number): Promise<ConversationsResponse> {
+    const url = limit != null ? `/api/conversations?limit=${limit}` : "/api/conversations";
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error("Failed to fetch conversations");
+    }
+    return response.json();
+}
+
+export async function fetchConversationDetail(conversationId: string): Promise<ConversationDetailResponse> {
+    const response = await fetch(`/api/conversation-detail?conversation_id=${encodeURIComponent(conversationId)}`);
+    if (!response.ok) {
+        throw new Error("Failed to fetch conversation detail");
+    }
+    return response.json();
 }

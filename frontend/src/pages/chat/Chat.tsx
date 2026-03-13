@@ -5,13 +5,15 @@ import { getLanguageText } from '../../utils/languageUtils';
 
 import styles from "./Chat.module.css";
 
-import { chatApiGpt, Approaches, AskResponse, ChatRequest, ChatRequestGpt, ChatTurn } from "../../api";
+import { chatApiGpt, fetchAuthInfo, Approaches, AskResponse, ChatRequest, ChatRequestGpt, ChatTurn } from "../../api";
 import { Answer, AnswerError, AnswerLoading } from "../../components/Answer";
 import { QuestionInput } from "../../components/QuestionInput";
 import { ExampleList } from "../../components/Example";
 import { UserChatMessage } from "../../components/UserChatMessage";
 import { AnalysisPanel, AnalysisPanelTabs } from "../../components/AnalysisPanel";
 import { ClearChatButton } from "../../components/ClearChatButton";
+import { HistoryButton } from "../../components/HistoryButton";
+import { ConversationHistory } from "../../components/ConversationHistory";
 import { getTokenOrRefresh } from "../../components/QuestionInput/token_util";
 import { SpeechConfig, AudioConfig, SpeechSynthesizer, ResultReason } from "microsoft-cognitiveservices-speech-sdk";
 import { getFileType } from "../../utils/functions";
@@ -48,6 +50,9 @@ const Chat = () => {
 
     const [userId, setUserId] = useState<string>("");
     const triggered = useRef(false);
+
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
 
 
     const makeApiRequestGpt = async (question: string) => {
@@ -166,6 +171,7 @@ const Chat = () => {
         chatMessageStreamEnd.current?.scrollIntoView({ behavior: "smooth" });
         if (triggered.current === false) {
             triggered.current = true;
+            fetchAuthInfo().then(info => setIsAuthenticated(info.authenticated)).catch(() => {});
         }
         const language = navigator.language;
         if (language.startsWith("pt")) {
@@ -204,6 +210,17 @@ const Chat = () => {
 
     const onExampleClicked = (example: string) => {
         makeApiRequestGpt(example);
+    };
+
+    const onConversationLoad = (conversationId: string, loadedAnswers: [string, AskResponse][]) => {
+        if (loadedAnswers.length > 0) {
+            lastQuestionRef.current = loadedAnswers[loadedAnswers.length - 1][0];
+        }
+        setAnswers(loadedAnswers);
+        setUserId(conversationId);
+        setError(undefined);
+        setActiveCitation(undefined);
+        setActiveAnalysisPanelTab(undefined);
     };
 
     const onShowCitation = async (citation: string, fileName: string, index: number, page?: number) => {
@@ -268,6 +285,9 @@ const Chat = () => {
         <div className={styles.container}>
             <div className={styles.commandsContainer}>
                 <ClearChatButton className={styles.commandButton} onClick={clearChat} disabled={!lastQuestionRef.current || isLoading} />
+                {isAuthenticated && (
+                    <HistoryButton className={styles.commandButton} onClick={() => setIsHistoryOpen(true)} disabled={isLoading} />
+                )}
             </div>
             <div className={styles.chatRoot}>
                 <div className={styles.chatContainer}>
@@ -339,6 +359,12 @@ const Chat = () => {
                     />
 
                 )}
+
+                <ConversationHistory
+                    isOpen={isHistoryOpen}
+                    onDismiss={() => setIsHistoryOpen(false)}
+                    onConversationLoad={onConversationLoad}
+                />
 
                 <Panel
                     headerText="Configure answer generation"
