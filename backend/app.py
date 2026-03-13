@@ -9,6 +9,10 @@ import requests
 
 from azure.identity import ManagedIdentityCredential, AzureCliCredential, ChainedTokenCredential
 from azure.storage.blob import BlobServiceClient
+import mimetypes
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('text/css', '.css')
+
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request, session, redirect, url_for, send_from_directory
 from flask_cors import CORS
